@@ -2171,18 +2171,35 @@ router.post("/save", async (req, res) => {
         }
       }
 
-      // 🆕 PROMO CODE AMOUNT DEDUCTION
+      // 🆕 PROMO CODE AMOUNT DEDUCTION & USAGE INCREMENT
       if (discountRemarks && discountRemarks.startsWith("Promo:") && orderDiscountAmount > 0) {
         const promoCode = discountRemarks.substring(6).trim();
-        console.log(`[SAVE SALE] Deducting Promo Code amount for code: ${promoCode}, Amount: ${orderDiscountAmount}`);
-        await transaction.request()
+        console.log(`[SAVE SALE] Processing promo code: ${promoCode}, Amount: ${orderDiscountAmount}`);
+        
+        const checkManualRes = await transaction.request()
           .input("PromoCode", sql.NVarChar(100), promoCode)
-          .input("DeductAmount", sql.Decimal(18, 2), orderDiscountAmount)
-          .query(`
-            UPDATE MemberMaster 
-            SET Promoamount = CASE WHEN Promoamount - @DeductAmount < 0 THEN 0 ELSE Promoamount - @DeductAmount END 
-            WHERE Promocode = @PromoCode AND IsActive = 1
-          `);
+          .query("SELECT PromoId FROM PromoCodeMaster WHERE PromoCode = @PromoCode");
+
+        if (checkManualRes.recordset.length > 0) {
+          console.log(`[SAVE SALE] Incrementing UsedCount in PromoCodeMaster for manual promo: ${promoCode}`);
+          await transaction.request()
+            .input("PromoCode", sql.NVarChar(100), promoCode)
+            .query(`
+              UPDATE PromoCodeMaster 
+              SET UsedCount = UsedCount + 1 
+              WHERE PromoCode = @PromoCode
+            `);
+        } else {
+          console.log(`[SAVE SALE] Deducting Promo Code amount from MemberMaster for code: ${promoCode}`);
+          await transaction.request()
+            .input("PromoCode", sql.NVarChar(100), promoCode)
+            .input("DeductAmount", sql.Decimal(18, 2), orderDiscountAmount)
+            .query(`
+              UPDATE MemberMaster 
+              SET Promoamount = CASE WHEN Promoamount - @DeductAmount < 0 THEN 0 ELSE Promoamount - @DeductAmount END 
+              WHERE Promocode = @PromoCode AND IsActive = 1
+            `);
+        }
       }
 
       // 🚀 PROFESSIONAL ARCHIVE: Move from Cur to History (Only run if not split, or if split has no remaining items)
@@ -3142,5 +3159,51 @@ async function logLoyaltyVisitAsync(pool, settlementId, billNo, phone, name, ite
     console.error("⚠️ [Loyalty Post-Save Sync Error] Failed:", err);
   }
 }
+
+// Validate manual promo code
+router.post("/validate-manual-promo", async (req, res) => {
+  try {
+    const { promoCode } = req.body;
+    if (!promoCode || promoCode.trim() === "") {
+      return res.status(400).json({ error: "Promo code is required" });
+    }
+
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("PromoCode", sql.NVarChar(100), promoCode.trim())
+      .query(`
+        SELECT PromoId, PromoCode, PromoName, DiscountType, DiscountValue, MaxUsage, UsedCount, IsActive
+        FROM PromoCodeMaster
+        WHERE PromoCode = @PromoCode
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: "Invalid promo code" });
+    }
+
+    const promo = result.recordset[0];
+    if (promo.IsActive !== true && promo.IsActive !== 1) {
+      return res.status(400).json({ error: "Promo code is inactive" });
+    }
+
+    if (promo.UsedCount >= promo.MaxUsage) {
+      return res.status(400).json({ error: "Promo code usage limit reached" });
+    }
+
+    res.json({
+      success: true,
+      promo: {
+        PromoId: promo.PromoId,
+        PromoCode: promo.PromoCode,
+        PromoName: promo.PromoName,
+        DiscountType: promo.DiscountType,
+        DiscountValue: parseFloat(promo.DiscountValue)
+      }
+    });
+  } catch (err) {
+    console.error("[VALIDATE MANUAL PROMO ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

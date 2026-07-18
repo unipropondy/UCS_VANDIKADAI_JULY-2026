@@ -449,6 +449,32 @@ async function initDB(pool) {
       END
     `);
 
+    // 13.5 PromoCodeMaster
+    await runQuery("Create PromoCodeMaster", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PromoCodeMaster]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[PromoCodeMaster](
+              [PromoId] [uniqueidentifier] NOT NULL PRIMARY KEY DEFAULT NEWID(),
+              [PromoCode] [nvarchar](100) NOT NULL UNIQUE,
+              [PromoName] [nvarchar](255) NULL,
+              [DiscountType] [nvarchar](50) NOT NULL,
+              [DiscountValue] [decimal](18, 2) NOT NULL,
+              [MaxUsage] [int] NOT NULL DEFAULT 0,
+              [UsedCount] [int] NOT NULL DEFAULT 0,
+              [IsActive] [bit] NOT NULL DEFAULT 1
+          )
+      END
+    `);
+
+    await runQuery("Seed PromoCodeMaster", `
+      IF NOT EXISTS (SELECT TOP 1 1 FROM [dbo].[PromoCodeMaster])
+      BEGIN
+          INSERT INTO [dbo].[PromoCodeMaster] (PromoCode, PromoName, DiscountType, DiscountValue, MaxUsage, UsedCount, IsActive) VALUES
+          ('WELCOME10', 'Welcome 10% Off', 'PERCENTAGE', 10.00, 100, 0, 1),
+          ('SAVE5', 'Save $5', 'AMOUNT', 5.00, 50, 0, 1)
+      END
+    `);
+
     // 14. Create PaymentTransactionDetails table for unified split payments
     await runQuery("Create PaymentTransactionDetails", `
       IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PaymentTransactionDetails]') AND type in (N'U'))

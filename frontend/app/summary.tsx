@@ -144,6 +144,9 @@ export default function SummaryScreen() {
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const [availablePromos, setAvailablePromos] = useState<any[]>([]);
   const [loadingPromos, setLoadingPromos] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualCode, setManualCode] = useState("");
+  const [isValidatingManual, setIsValidatingManual] = useState(false);
 
   const [loyaltyPhone, setLoyaltyPhone] = useState("");
   const [loyaltyName, setLoyaltyName] = useState("");
@@ -692,6 +695,70 @@ export default function SummaryScreen() {
       showToast({ type: "error", message: "Failed to apply promo code" });
     } finally {
       setIsApplyingPromo(false);
+    }
+  };
+
+  const handleManualPromoCode = async (code: string) => {
+    if (!code || code.trim() === "") {
+      showToast({ type: "warning", message: "Enter Promo Code" });
+      return;
+    }
+    try {
+      setIsValidatingManual(true);
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/sales/validate-manual-promo`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ promoCode: code.trim() })
+      });
+
+      if (!res.ok) {
+        let errMsg = "Invalid Promo Code";
+        try {
+          const errorData = await res.json();
+          errMsg = errorData.error || errMsg;
+        } catch (_) {}
+        showToast({ type: "error", message: errMsg });
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success && data.promo) {
+        const { DiscountType, DiscountValue, PromoCode } = data.promo;
+        const discountData = {
+          applied: true,
+          type: DiscountType.toLowerCase() === "percentage" ? ("percentage" as const) : ("fixed" as const),
+          value: parseFloat(DiscountValue) || 0,
+          label: `Promo: ${PromoCode.trim()}`,
+        };
+        applyDiscount(discountData);
+
+        const currentContext = getOrderContext();
+        if (currentContext) {
+          updateOrderDiscount(currentContext, discountData);
+        }
+
+        showToast({
+          type: "success",
+          message: "Promo Code Applied",
+          subtitle: DiscountType.toLowerCase() === "percentage" 
+            ? `${DiscountValue}% discount applied`
+            : `Discount of ${currencySymbol}${parseFloat(DiscountValue).toFixed(2)} applied`
+        });
+
+        setShowPromoModal(false);
+        setPromoCodeInput("");
+        setShowManualInput(false);
+        setManualCode("");
+      }
+    } catch (err: any) {
+      console.error("Error applying manual promo code:", err);
+      showToast({ type: "error", message: "Failed to apply promo code" });
+    } finally {
+      setIsValidatingManual(false);
     }
   };
 
@@ -2718,98 +2785,180 @@ export default function SummaryScreen() {
                   Select a saved promo code or search/type to apply.
                 </Text>
 
-                <View style={[styles.searchWrap, { width: "100%", marginTop: 5, marginBottom: 15 }]}>
-                  <Ionicons name="search-outline" size={20} color={Theme.textMuted} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search promo or type code manually..."
-                    placeholderTextColor={Theme.textMuted}
-                    value={promoCodeInput}
-                    onChangeText={setPromoCodeInput}
-                    autoCapitalize="characters"
-                    autoFocus
-                  />
-                  {promoCodeInput.length > 0 && (
-                    <TouchableOpacity onPress={() => setPromoCodeInput("")}>
-                      <Ionicons name="close-circle" size={20} color={Theme.textMuted} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {loadingPromos ? (
-                  <ActivityIndicator size="small" color={Theme.primary} style={{ marginVertical: 20 }} />
-                ) : (
-                  <ScrollView style={{ maxHeight: 220, marginBottom: 20 }} showsVerticalScrollIndicator={true}>
-                    {filteredPromos.length === 0 ? (
-                      <Text style={{ textAlign: "center", color: Theme.textMuted, marginVertical: 15, fontFamily: Fonts.regular }}>
-                        No active promo codes found
-                      </Text>
-                    ) : (
-                      filteredPromos.map((item) => (
-                        <TouchableOpacity
-                          key={item.MemberId}
-                          style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: 12,
-                            borderRadius: 12,
-                            backgroundColor: Theme.bgMuted,
-                            marginBottom: 8,
-                            borderWidth: 1,
-                            borderColor: Theme.border,
-                          }}
-                          onPress={() => handlePromoCode(item.Promocode)}
-                        >
-                          <View style={{ flex: 1, marginRight: 10 }}>
-                            <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: Theme.textPrimary }}>
-                              {item.Promocode}
-                            </Text>
-                            <Text style={{ fontFamily: Fonts.medium, fontSize: 12, color: Theme.textSecondary, marginTop: 2 }}>
-                              {item.Name} ({item.Phone})
-                            </Text>
-                          </View>
-                          <Text style={{ fontFamily: Fonts.black, fontSize: 16, color: Theme.primary }}>
-                            {currencySymbol}{Number(item.Promoamount || 0).toFixed(2)}
-                          </Text>
+                {showManualInput ? (
+                  <View style={{ width: "100%", marginBottom: 10 }}>
+                    <Text style={[styles.modalDesc, { marginBottom: 10 }]}>
+                      Enter the manual promo code below:
+                    </Text>
+                    <View style={[styles.searchWrap, { width: "100%", marginTop: 5, marginBottom: 15 }]}>
+                      <Ionicons name="card-outline" size={20} color={Theme.textMuted} />
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Enter Promo Code..."
+                        placeholderTextColor={Theme.textMuted}
+                        value={manualCode}
+                        onChangeText={setManualCode}
+                        autoCapitalize="characters"
+                        autoFocus
+                      />
+                      {manualCode.length > 0 && (
+                        <TouchableOpacity onPress={() => setManualCode("")}>
+                          <Ionicons name="close-circle" size={20} color={Theme.textMuted} />
                         </TouchableOpacity>
-                      ))
-                    )}
-                  </ScrollView>
-                )}
+                      )}
+                    </View>
 
-                <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
-                  <TouchableOpacity
-                    style={[
-                      styles.mergeConfirmBtn,
-                      styles.mergeConfirmBtnCancel,
-                      { paddingVertical: 12 },
-                    ]}
-                    onPress={() => {
-                      setShowPromoModal(false);
-                      setPromoCodeInput("");
-                    }}
-                  >
-                    <Text style={styles.mergeConfirmBtnCancelText}>Cancel</Text>
-                  </TouchableOpacity>
+                    <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.mergeConfirmBtn,
+                          styles.mergeConfirmBtnCancel,
+                          { paddingVertical: 12 },
+                        ]}
+                        onPress={() => {
+                          setShowManualInput(false);
+                          setManualCode("");
+                        }}
+                      >
+                        <Text style={styles.mergeConfirmBtnCancelText}>Back</Text>
+                      </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.mergeConfirmBtn,
-                      styles.mergeConfirmBtnPrimary,
-                      { paddingVertical: 12 },
-                      (!promoCodeInput.trim() || isApplyingPromo) && { opacity: 0.6 },
-                    ]}
-                    onPress={() => handlePromoCode(promoCodeInput)}
-                    disabled={!promoCodeInput.trim() || isApplyingPromo}
-                  >
-                    {isApplyingPromo ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <TouchableOpacity
+                        style={[
+                          styles.mergeConfirmBtn,
+                          styles.mergeConfirmBtnPrimary,
+                          { paddingVertical: 12 },
+                          (!manualCode.trim() || isValidatingManual) && { opacity: 0.6 },
+                        ]}
+                        onPress={() => handleManualPromoCode(manualCode)}
+                        disabled={!manualCode.trim() || isValidatingManual}
+                      >
+                        {isValidatingManual ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.mergeConfirmBtnPrimaryText}>Validate & Apply</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <View style={[styles.searchWrap, { width: "100%", marginTop: 5, marginBottom: 15 }]}>
+                      <Ionicons name="search-outline" size={20} color={Theme.textMuted} />
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search promo or type code manually..."
+                        placeholderTextColor={Theme.textMuted}
+                        value={promoCodeInput}
+                        onChangeText={setPromoCodeInput}
+                        autoCapitalize="characters"
+                        autoFocus
+                      />
+                      {promoCodeInput.length > 0 && (
+                        <TouchableOpacity onPress={() => setPromoCodeInput("")}>
+                          <Ionicons name="close-circle" size={20} color={Theme.textMuted} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {loadingPromos ? (
+                      <ActivityIndicator size="small" color={Theme.primary} style={{ marginVertical: 20 }} />
                     ) : (
-                      <Text style={styles.mergeConfirmBtnPrimaryText}>Apply</Text>
+                      <ScrollView style={{ maxHeight: 220, marginBottom: 15 }} showsVerticalScrollIndicator={true}>
+                        {filteredPromos.length === 0 ? (
+                          <Text style={{ textAlign: "center", color: Theme.textMuted, marginVertical: 15, fontFamily: Fonts.regular }}>
+                            No active promo codes found
+                          </Text>
+                        ) : (
+                          filteredPromos.map((item) => (
+                            <TouchableOpacity
+                              key={item.MemberId}
+                              style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: 12,
+                                borderRadius: 12,
+                                backgroundColor: Theme.bgMuted,
+                                marginBottom: 8,
+                                borderWidth: 1,
+                                borderColor: Theme.border,
+                              }}
+                              onPress={() => handlePromoCode(item.Promocode)}
+                            >
+                              <View style={{ flex: 1, marginRight: 10 }}>
+                                <Text style={{ fontFamily: Fonts.bold, fontSize: 15, color: Theme.textPrimary }}>
+                                  {item.Promocode}
+                                </Text>
+                                <Text style={{ fontFamily: Fonts.medium, fontSize: 12, color: Theme.textSecondary, marginTop: 2 }}>
+                                  {item.Name} ({item.Phone})
+                                </Text>
+                              </View>
+                              <Text style={{ fontFamily: Fonts.black, fontSize: 16, color: Theme.primary }}>
+                                {currencySymbol}{Number(item.Promoamount || 0).toFixed(2)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))
+                        )}
+                      </ScrollView>
                     )}
-                  </TouchableOpacity>
-                </View>
+
+                    <TouchableOpacity
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        backgroundColor: Theme.bgMuted,
+                        borderWidth: 1,
+                        borderColor: Theme.border,
+                        alignItems: "center",
+                        marginBottom: 15,
+                        width: "100%",
+                        flexDirection: "row",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                      onPress={() => setShowManualInput(true)}
+                    >
+                      <Ionicons name="create-outline" size={18} color={Theme.primary} />
+                      <Text style={{ fontFamily: Fonts.bold, color: Theme.primary, fontSize: 15 }}>
+                        Manual Promo Code
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.mergeConfirmBtn,
+                          styles.mergeConfirmBtnCancel,
+                          { paddingVertical: 12 },
+                        ]}
+                        onPress={() => {
+                          setShowPromoModal(false);
+                          setPromoCodeInput("");
+                        }}
+                      >
+                        <Text style={styles.mergeConfirmBtnCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.mergeConfirmBtn,
+                          styles.mergeConfirmBtnPrimary,
+                          { paddingVertical: 12 },
+                          (!promoCodeInput.trim() || isApplyingPromo) && { opacity: 0.6 },
+                        ]}
+                        onPress={() => handlePromoCode(promoCodeInput)}
+                        disabled={!promoCodeInput.trim() || isApplyingPromo}
+                      >
+                        {isApplyingPromo ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.mergeConfirmBtnPrimaryText}>Apply</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             </TouchableWithoutFeedback>
           </View>
