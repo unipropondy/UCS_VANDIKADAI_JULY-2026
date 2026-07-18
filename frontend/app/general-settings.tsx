@@ -104,7 +104,7 @@ export default function GeneralSettingsScreen() {
   const [showPromoCode, setShowPromoCode] = useState(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
 
   const [enablePrintPoller, setEnablePrintPoller] = useState(settings.enablePrintPoller !== undefined ? settings.enablePrintPoller : true);
-  const [printPollerUrl, setPrintPollerUrl] = useState(settings.printPollerUrl || "https://kindeejuly2026-production.up.railway.app");
+  const [printPollerUrl, setPrintPollerUrl] = useState(settings.printPollerUrl || "https://ucsvandikadaijuly-2026-production.up.railway.app");
   const [printPollerToken, setPrintPollerToken] = useState(settings.printPollerToken || "unipro-pos-bridge-token-2026");
   const [printPollerStoreId, setPrintPollerStoreId] = useState(settings.printPollerStoreId || "1");
 
@@ -185,7 +185,7 @@ export default function GeneralSettingsScreen() {
     setShowPromoCode(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
 
     setEnablePrintPoller(settings.enablePrintPoller !== undefined ? settings.enablePrintPoller : true);
-    setPrintPollerUrl(settings.printPollerUrl || "https://kindeejuly2026-production.up.railway.app");
+    setPrintPollerUrl(settings.printPollerUrl || "https://ucsvandikadaijuly-2026-production.up.railway.app");
     setPrintPollerToken(settings.printPollerToken || "unipro-pos-bridge-token-2026");
     setPrintPollerStoreId(settings.printPollerStoreId || "1");
 

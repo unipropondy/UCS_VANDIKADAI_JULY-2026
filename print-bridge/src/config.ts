@@ -95,7 +95,7 @@ const defaultConfig: BridgeConfig = {
   backends: [
     {
       name: "RN POS",
-      url: "https://kindeejuly2026-production.up.railway.app",
+      url: "https://ucsvandikadaijuly-2026-production.up.railway.app",
       enabled: true,
     },
     {
@@ -123,7 +123,7 @@ function loadConfig(): BridgeConfig {
       const url =
         parsed.apiUrl ||
         parsed.backendUrl ||
-        "https://kindeejuly2026-production.up.railway.app";
+        "https://ucsvandikadaijuly-2026-production.up.railway.app";
       parsed.backends = [
         {
           name: "Default",
