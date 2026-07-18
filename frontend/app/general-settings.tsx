@@ -1,0 +1,1011 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  useWindowDimensions,
+  Platform,
+  Animated,
+  Easing,
+  ScrollView,
+  TextInput,
+  Alert,
+  Modal,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { Theme } from "../constants/theme";
+import { Fonts } from "../constants/Fonts";
+import { useGeneralSettingsStore } from "../stores/generalSettingsStore";
+import { useToast } from "../components/Toast";
+import { API_URL } from "../constants/Config";
+import { useAuthStore } from "../stores/authStore";
+
+// ── SLEEK COMPACT ANIMATED SWITCH COMPONENT ──
+interface CustomSwitchProps {
+  value: boolean;
+  onValueChange: (val: boolean) => void;
+  disabled?: boolean;
+}
+
+const CustomSwitch = ({ value, onValueChange, disabled = false }: CustomSwitchProps) => {
+  const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: value ? 1 : 0,
+      duration: 180,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [value]);
+
+  const translateX = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [3, 25],
+  });
+
+  const backgroundColor = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["#E2E8F0", Theme.primary],
+  });
+
+  return (
+    <TouchableOpacity
+      activeOpacity={disabled ? 1 : 0.8}
+      onPress={() => !disabled && onValueChange(!value)}
+      style={styles.switchTouchArea}
+    >
+      <Animated.View
+        style={[
+          styles.switchContainer,
+          { backgroundColor },
+          disabled && { opacity: 0.5 },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.switchThumb,
+            { transform: [{ translateX }] },
+          ]}
+        />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+export default function GeneralSettingsScreen() {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const router = useRouter();
+  const { showToast } = useToast();
+  const { user } = useAuthStore();
+
+  const { settings, loading, fetchSettings, updateSettings } = useGeneralSettingsStore();
+
+  // Local setting states
+  const [enableKOT, setEnableKOT] = useState(settings.enableKOT);
+  const [enableKDS, setEnableKDS] = useState(settings.enableKDS);
+  const [enableCheckoutBill, setEnableCheckoutBill] = useState(settings.enableCheckoutBill);
+  const [enableCheckoutFlow, setEnableCheckoutFlow] = useState(settings.enableCheckoutFlow);
+  const [enableDirectProcessToPay, setEnableDirectProcessToPay] = useState(settings.enableDirectProcessToPay);
+  const [customerSideDisplay, setCustomerSideDisplay] = useState(settings.customerSideDisplay);
+  const [enableGuestDetailsPopup, setEnableGuestDetailsPopup] = useState(settings.enableGuestDetailsPopup);
+  const [enableCashDrawer, setEnableCashDrawer] = useState(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
+  const [SVCIdentification, setSVCIdentification] = useState(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
+  const [enableKDSPrint, setEnableKDSPrint] = useState(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
+  const [enableCombo, setEnableCombo] = useState(settings.enableCombo !== undefined ? settings.enableCombo : true);
+  const [enableComboPrint, setEnableComboPrint] = useState(settings.enableComboPrint !== undefined ? settings.enableComboPrint : true);
+  const [showLoyalty, setShowLoyalty] = useState(settings.showLoyalty !== undefined ? settings.showLoyalty : true);
+  const [showRewardPoints, setShowRewardPoints] = useState(settings.showRewardPoints !== undefined ? settings.showRewardPoints : true);
+  const [showPromoCode, setShowPromoCode] = useState(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
+
+  const [enablePrintPoller, setEnablePrintPoller] = useState(settings.enablePrintPoller !== undefined ? settings.enablePrintPoller : true);
+  const [printPollerUrl, setPrintPollerUrl] = useState(settings.printPollerUrl || "https://kindeejuly2026-production.up.railway.app");
+  const [printPollerToken, setPrintPollerToken] = useState(settings.printPollerToken || "unipro-pos-bridge-token-2026");
+  const [printPollerStoreId, setPrintPollerStoreId] = useState(settings.printPollerStoreId || "1");
+
+  const [isPollerUnlocked, setIsPollerUnlocked] = useState(false);
+  const [passwordVerificationPurpose, setPasswordVerificationPurpose] = useState<"cashDrawer" | "poller" | null>(null);
+  const [pendingPrintPollerValue, setPendingPrintPollerValue] = useState<boolean | null>(null);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [verifyingPassword, setVerifyingPassword] = useState(false);
+  const [pendingCashDrawerValue, setPendingCashDrawerValue] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Change Password States
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePasswordSubmit = async () => {
+    if (!newPassword || !confirmPassword) {
+      showToast({ type: "warning", message: "Please fill all fields" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast({ type: "warning", message: "New passwords do not match" });
+      return;
+    }
+    if (!user?.userId) {
+      showToast({ type: "error", message: "User not logged in" });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.userId,
+          newPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast({ type: "success", message: "Password updated successfully!" });
+        setShowChangePasswordModal(false);
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        Alert.alert("Failed", data.message || "Failed to update password");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not connect to server to change password");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
+    setEnableKOT(settings.enableKOT);
+    setEnableKDS(settings.enableKDS);
+    setEnableCheckoutBill(settings.enableCheckoutBill);
+    setCustomerSideDisplay(settings.customerSideDisplay);
+    setEnableGuestDetailsPopup(settings.enableGuestDetailsPopup !== undefined ? settings.enableGuestDetailsPopup : true);
+    setEnableCashDrawer(settings.enableCashDrawer !== undefined ? settings.enableCashDrawer : true);
+    setSVCIdentification(settings.SVCIdentification !== undefined ? settings.SVCIdentification : true);
+    setEnableKDSPrint(settings.enableKDSPrint !== undefined ? settings.enableKDSPrint : true);
+    setEnableCombo(settings.enableCombo !== undefined ? settings.enableCombo : true);
+    setEnableComboPrint(settings.enableComboPrint !== undefined ? settings.enableComboPrint : true);
+    setShowLoyalty(settings.showLoyalty !== undefined ? settings.showLoyalty : true);
+    setShowRewardPoints(settings.showRewardPoints !== undefined ? settings.showRewardPoints : true);
+    setShowPromoCode(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
+
+    setEnablePrintPoller(settings.enablePrintPoller !== undefined ? settings.enablePrintPoller : true);
+    setPrintPollerUrl(settings.printPollerUrl || "https://kindeejuly2026-production.up.railway.app");
+    setPrintPollerToken(settings.printPollerToken || "unipro-pos-bridge-token-2026");
+    setPrintPollerStoreId(settings.printPollerStoreId || "1");
+
+    let initialCheckoutFlow = settings.enableCheckoutFlow;
+    let initialDirectProcess = settings.enableDirectProcessToPay;
+
+    if ((initialCheckoutFlow && initialDirectProcess) || (!initialCheckoutFlow && !initialDirectProcess)) {
+      initialCheckoutFlow = true;
+      initialDirectProcess = false;
+    }
+
+    setEnableCheckoutFlow(initialCheckoutFlow);
+    setEnableDirectProcessToPay(initialDirectProcess);
+  }, [settings]);
+
+  const handleToggleCashDrawer = (val: boolean) => {
+    setPendingCashDrawerValue(val);
+    setPasswordValue("");
+    setPasswordVerificationPurpose("cashDrawer");
+    setShowPasswordModal(true);
+  };
+
+  const handleUnlockPoller = () => {
+    if (isPollerUnlocked) {
+      setIsPollerUnlocked(false);
+      showToast({ type: "info", message: "Poller Settings Locked" });
+    } else {
+      setPasswordValue("");
+      setPasswordVerificationPurpose("poller");
+      setShowPasswordModal(true);
+    }
+  };
+
+  const handleTogglePrintPoller = (val: boolean) => {
+    if (isPollerUnlocked) {
+      setEnablePrintPoller(val);
+    } else {
+      setPendingPrintPollerValue(val);
+      setPasswordValue("");
+      setPasswordVerificationPurpose("poller");
+      setShowPasswordModal(true);
+    }
+  };
+
+  const handlePasswordVerify = async () => {
+    if (!passwordValue) {
+      showToast({ type: "warning", message: "Please enter password" });
+      return;
+    }
+    setVerifyingPassword(true);
+    try {
+      const verifyRes = await fetch(`${API_URL}/api/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passwordValue }),
+      });
+      const verifyData = await verifyRes.json();
+      if (verifyData.success) {
+        if (passwordVerificationPurpose === "cashDrawer" && pendingCashDrawerValue !== null) {
+          setEnableCashDrawer(pendingCashDrawerValue);
+        } else if (passwordVerificationPurpose === "poller") {
+          setIsPollerUnlocked(true);
+          if (pendingPrintPollerValue !== null) {
+            setEnablePrintPoller(pendingPrintPollerValue);
+          }
+        }
+        setShowPasswordModal(false);
+        setPasswordVerificationPurpose(null);
+        setPendingCashDrawerValue(null);
+        setPendingPrintPollerValue(null);
+        showToast({ type: "success", message: "Access Unlocked" });
+      } else {
+        Alert.alert("Access Denied", "Incorrect admin password");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not verify password. Check connection.");
+    } finally {
+      setVerifyingPassword(false);
+    }
+  };
+
+  const handleToggleCheckoutFlow = (val: boolean) => {
+    if (val) {
+      setEnableCheckoutFlow(true);
+      setEnableDirectProcessToPay(false);
+    } else {
+      setEnableCheckoutFlow(false);
+      setEnableDirectProcessToPay(true);
+    }
+  };
+
+  const handleToggleDirectProcessToPay = (val: boolean) => {
+    if (val) {
+      setEnableDirectProcessToPay(true);
+      setEnableCheckoutFlow(false);
+    } else {
+      setEnableDirectProcessToPay(false);
+      setEnableCheckoutFlow(true);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const success = await updateSettings({
+      enableKOT,
+      enableKDS,
+      enableCheckoutBill,
+      enableCheckoutFlow,
+      enableDirectProcessToPay,
+      customerSideDisplay,
+      enableGuestDetailsPopup,
+      enableCashDrawer,
+      SVCIdentification,
+      enableKDSPrint,
+      enableCombo,
+      showLoyalty,
+      showRewardPoints,
+      showPromoCode,
+      enableComboPrint,
+      enablePrintPoller,
+      printPollerUrl,
+      printPollerToken,
+      printPollerStoreId,
+    });
+    setSaving(false);
+
+    if (success) {
+      showToast({ type: "success", message: "Settings saved successfully." });
+      router.back();
+    } else {
+      showToast({ type: "error", message: "Failed to save settings. Please try again." });
+    }
+  };
+
+  const settingsList = [
+    {
+      title: "KOT (Kitchen Order Ticket)",
+      desc: "Enable kitchen ticket printing.",
+      icon: "receipt-outline",
+      value: enableKOT,
+      onToggle: setEnableKOT,
+    },
+    {
+      title: "KDS (Kitchen Display System)",
+      desc: "Show kitchen display screen.",
+      icon: "desktop-outline",
+      value: enableKDS,
+      onToggle: setEnableKDS,
+    },
+    {
+      title: "Checkout Bill",
+      desc: "Enable checkout receipt printing.",
+      icon: "wallet-outline",
+      value: enableCheckoutBill,
+      onToggle: setEnableCheckoutBill,
+    },
+    {
+      title: "Enable Checkout Flow",
+      desc: "Enable order summary checkout step.",
+      icon: "git-compare-outline",
+      value: enableCheckoutFlow,
+      onToggle: handleToggleCheckoutFlow,
+    },
+    {
+      title: "Enable Direct Process To Pay",
+      desc: "Show 'Process To Pay' shortcut button in Cart Sidebar.",
+      icon: "card-outline",
+      value: enableDirectProcessToPay,
+      onToggle: handleToggleDirectProcessToPay,
+    },
+    {
+      title: "Customer-Side Display",
+      desc: "Enable/disable secondary customer screen sync.",
+      icon: "tv-outline",
+      value: customerSideDisplay,
+      onToggle: setCustomerSideDisplay,
+    },
+    {
+      title: "Guest Details Popup",
+      desc: "Show guest info details popup before entering order screen.",
+      icon: "people-outline",
+      value: enableGuestDetailsPopup,
+      onToggle: setEnableGuestDetailsPopup,
+    },
+    {
+      title: "Enable Cash Drawer Module",
+      desc: "Enable checkout cashbox opening triggers.",
+      icon: "wallet-outline",
+      value: enableCashDrawer,
+      onToggle: handleToggleCashDrawer,
+    },
+    {
+      title: "SVC Identification",
+      desc: "Highlight Service (SVC) items with red identification.",
+      icon: "pricetag-outline",
+      value: SVCIdentification,
+      onToggle: setSVCIdentification,
+    },
+    {
+      title: "KDS Printer Button",
+      desc: "Show the PRINT button on every order card in KDS screen.",
+      icon: "print-outline",
+      value: enableKDSPrint,
+      onToggle: setEnableKDSPrint,
+    },
+    {
+      title: "Combo Feature",
+      desc: "Enable combo menu items and selections wizard.",
+      icon: "fast-food-outline",
+      value: enableCombo,
+      onToggle: setEnableCombo,
+    },
+    {
+      title: "Combo Print Feature",
+      desc: "Send sub-items in combo to their respective kitchen printers.",
+      icon: "print-outline",
+      value: enableComboPrint,
+      onToggle: setEnableComboPrint,
+    },
+    {
+      title: "Loyalty Feature",
+      desc: "Show the Loyalty button in the POS Summary screen.",
+      icon: "ribbon-outline",
+      value: showLoyalty,
+      onToggle: setShowLoyalty,
+    },
+    {
+      title: "Reward Points Feature",
+      desc: "Show the Reward Points button in the POS Summary screen.",
+      icon: "gift-outline",
+      value: showRewardPoints,
+      onToggle: setShowRewardPoints,
+    },
+    {
+      title: "Promo Code Feature",
+      desc: "Show the Promo Code button in the POS Summary screen.",
+      icon: "pricetag-outline",
+      value: showPromoCode,
+      onToggle: setShowPromoCode,
+    },
+  ];
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)/category" as any);
+            }
+          }} 
+          style={styles.backBtn} 
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={Theme.textPrimary} />
+        </TouchableOpacity>
+        <View style={styles.headerLeft}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="settings" size={22} color={Theme.primary} />
+            <Text style={styles.headerTitle}>General Settings</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Body Grid */}
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.gridContainer}>
+          {settingsList.map((item, index) => (
+            <View
+              key={index}
+              style={[
+                styles.settingCard,
+                item.value && styles.settingCardActive,
+                isTablet ? styles.cardTablet : styles.cardMobile,
+              ]}
+            >
+              <View style={styles.cardLeft}>
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.iconWrapper, item.value ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                    <Ionicons name={item.icon as any} size={18} color={item.value ? Theme.primary : Theme.textSecondary} />
+                  </View>
+                  <Text style={styles.settingTitle} numberOfLines={1}>{item.title}</Text>
+                </View>
+                <Text style={styles.settingDesc}>{item.desc}</Text>
+              </View>
+              <CustomSwitch value={item.value} onValueChange={item.onToggle} />
+            </View>
+          ))}
+        </View>
+
+        {/* QR Print Poller Section */}
+        <View style={styles.pollerSection}>
+          <View style={[styles.settingCard, enablePrintPoller && styles.settingCardActive, { width: "100%", marginBottom: 12 }]}>
+            <View style={styles.cardLeft}>
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.iconWrapper, enablePrintPoller ? styles.iconWrapperActive : styles.iconWrapperInactive]}>
+                  <Ionicons name="print-outline" size={18} color={enablePrintPoller ? Theme.primary : Theme.textSecondary} />
+                </View>
+                <Text style={styles.settingTitle}>QR Code Print Server (Poller)</Text>
+              </View>
+              <Text style={styles.settingDesc}>Poll and print QR orders from the online Railway server automatically.</Text>
+            </View>
+            <CustomSwitch value={enablePrintPoller} onValueChange={handleTogglePrintPoller} />
+          </View>
+
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 12 }}>
+            <TouchableOpacity
+              style={[
+                styles.unlockPollerBtn,
+                isPollerUnlocked ? styles.unlockPollerBtnActive : styles.unlockPollerBtnInactive
+              ]}
+              onPress={handleUnlockPoller}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isPollerUnlocked ? "lock-open-outline" : "lock-closed-outline"}
+                size={16}
+                color={isPollerUnlocked ? "#FF6B00" : "#64748B"}
+              />
+              <Text
+                style={[
+                  styles.unlockPollerBtnText,
+                  isPollerUnlocked ? styles.unlockPollerBtnTextActive : styles.unlockPollerBtnTextInactive
+                ]}
+              >
+                {isPollerUnlocked ? "Lock Poller Settings" : "Modify Poller Settings"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {enablePrintPoller && (
+            <View style={styles.pollerInputsContainer}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Railway Poller URL</Text>
+                <TextInput
+                  style={[styles.textInput, !isPollerUnlocked && { opacity: 0.6, backgroundColor: "#E2E8F0" }]}
+                  placeholder="https://your-railway-url.app"
+                  value={printPollerUrl}
+                  onChangeText={setPrintPollerUrl}
+                  autoCapitalize="none"
+                  editable={isPollerUnlocked}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Bridge Security Token</Text>
+                <TextInput
+                  style={[styles.textInput, !isPollerUnlocked && { opacity: 0.6, backgroundColor: "#E2E8F0" }]}
+                  placeholder="Enter security token"
+                  value={printPollerToken}
+                  onChangeText={setPrintPollerToken}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  editable={isPollerUnlocked}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Store ID</Text>
+                <TextInput
+                  style={[styles.textInput, !isPollerUnlocked && { opacity: 0.6, backgroundColor: "#E2E8F0" }]}
+                  placeholder="Enter Store ID"
+                  value={printPollerStoreId}
+                  onChangeText={setPrintPollerStoreId}
+                  autoCapitalize="none"
+                  editable={isPollerUnlocked}
+                />
+              </View>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.cancelBtn}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)/category" as any);
+            }
+          }}
+          disabled={saving || loading}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.cancelBtnText}>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.saveBtn, (saving || loading) && { opacity: 0.7 }]}
+          onPress={handleSave}
+          disabled={saving || loading}
+          activeOpacity={0.8}
+        >
+          {saving || loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save Settings</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Admin Password Modal for Cash Drawer toggle verification */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.pwOverlay}>
+          <View style={styles.pwModalContent}>
+            <View style={styles.pwHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={styles.pwIconWrapper}>
+                  <Ionicons name="lock-closed" size={18} color="#FF6B00" />
+                </View>
+                <Text style={styles.pwTitle}>Admin Verification</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPasswordModal(false)} style={styles.pwClose} activeOpacity={0.7}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.pwBody}>
+              <Text style={styles.pwDesc}>
+                {passwordVerificationPurpose === "poller"
+                  ? "Please enter admin password to unlock QR Code Print Server settings."
+                  : "Please enter admin password to unlock Cash Drawer settings."}
+              </Text>
+              <View style={styles.pwInputContainer}>
+                <Ionicons name="keypad-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                <TextInput
+                  style={styles.pwInput}
+                  secureTextEntry
+                  placeholder="Enter password..."
+                  placeholderTextColor="#94A3B8"
+                  value={passwordValue}
+                  onChangeText={setPasswordValue}
+                  onSubmitEditing={handlePasswordVerify}
+                  autoFocus
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.pwBtn}
+                onPress={handlePasswordVerify}
+                disabled={verifyingPassword}
+                activeOpacity={0.8}
+              >
+                {verifyingPassword ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.pwBtnText}>Verify Password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#FAF7F2",
+  },
+  header: {
+    height: 72,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    backgroundColor: "#FAF7F2",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    position: "relative",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backBtn: {
+    position: "absolute",
+    left: 24,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    zIndex: 10,
+  },
+  headerTitleContainer: {
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.black,
+    color: Theme.textPrimary,
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 24,
+  },
+  gridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  settingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: "#172B4D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  settingCardActive: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#FF6B00",
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B00",
+    shadowColor: "#FF6B00",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+  },
+  cardMobile: {
+    width: "100%",
+  },
+  cardTablet: {
+    width: "49%",
+  },
+  cardLeft: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 6,
+  },
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconWrapperActive: {
+    backgroundColor: "#FFF7ED",
+  },
+  iconWrapperInactive: {
+    backgroundColor: "#F3F4F6",
+  },
+  settingTitle: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+    flex: 1,
+  },
+  settingDesc: {
+    fontSize: 12,
+    fontFamily: Fonts.regular,
+    color: Theme.textSecondary,
+    lineHeight: 16,
+  },
+  switchTouchArea: {
+    paddingVertical: 4,
+  },
+  switchContainer: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  switchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  footer: {
+    padding: 20,
+    backgroundColor: "#FAF7F2",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  cancelBtn: {
+    height: 46,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: Theme.textSecondary,
+  },
+  saveBtn: {
+    height: 46,
+    paddingHorizontal: 28,
+    borderRadius: 10,
+    backgroundColor: "#FF6B00",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 140,
+    shadowColor: "#FF6B00",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  saveBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  pwOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pwModalContent: {
+    width: 400,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  pwHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  pwIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pwTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: Theme.textPrimary,
+  },
+  pwClose: {
+    padding: 4,
+  },
+  pwBody: {
+    gap: 20,
+  },
+  pwDesc: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: Theme.textSecondary,
+    lineHeight: 18,
+  },
+  pwInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: "#F8FAFC",
+  },
+  pwInput: {
+    flex: 1,
+    height: "100%",
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: Theme.textPrimary,
+    outlineWidth: 0,
+  },
+  pwBtn: {
+    height: 48,
+    backgroundColor: "#FF6B00",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#FF6B00",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+    marginTop: 8,
+  },
+  pwBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  pollerSection: {
+    marginTop: 20,
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 16,
+  },
+  pollerInputsContainer: {
+    marginTop: 16,
+    gap: 16,
+  },
+  inputGroup: {
+    width: "100%",
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Theme.textSecondary,
+  },
+  textInput: {
+    height: 44,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: Theme.textPrimary,
+    outlineWidth: 0,
+  },
+  changePasswordBtn: {
+    height: 44,
+    backgroundColor: Theme.primary,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    shadowColor: Theme.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  changePasswordBtnText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  unlockPollerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  unlockPollerBtnActive: {
+    borderColor: "#FF6B00",
+    backgroundColor: "#FFF7ED",
+  },
+  unlockPollerBtnInactive: {
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+  },
+  unlockPollerBtnText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+  },
+  unlockPollerBtnTextActive: {
+    color: "#FF6B00",
+  },
+  unlockPollerBtnTextInactive: {
+    color: "#64748B",
+  },
+});
+
