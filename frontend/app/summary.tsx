@@ -147,6 +147,8 @@ export default function SummaryScreen() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [isValidatingManual, setIsValidatingManual] = useState(false);
+  const [manualPromos, setManualPromos] = useState<any[]>([]);
+  const [loadingManualPromos, setLoadingManualPromos] = useState(false);
 
   const [loyaltyPhone, setLoyaltyPhone] = useState("");
   const [loyaltyName, setLoyaltyName] = useState("");
@@ -782,11 +784,37 @@ export default function SummaryScreen() {
     }
   };
 
+  const fetchManualPromos = async () => {
+    try {
+      setLoadingManualPromos(true);
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_URL}/api/sales/manual-promos`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setManualPromos(data);
+      }
+    } catch (err) {
+      console.error("Error fetching manual promos:", err);
+    } finally {
+      setLoadingManualPromos(false);
+    }
+  };
+
   useEffect(() => {
     if (showPromoModal) {
       fetchAvailablePromos();
     }
   }, [showPromoModal]);
+
+  useEffect(() => {
+    if (showPromoModal && showManualInput) {
+      fetchManualPromos();
+    }
+  }, [showPromoModal, showManualInput]);
 
   const filteredPromos = useMemo(() => {
     const query = promoCodeInput.trim().toLowerCase();
@@ -2775,15 +2803,19 @@ export default function SummaryScreen() {
             <TouchableWithoutFeedback>
               <View style={[styles.modalContent, { maxWidth: 420, maxHeight: "85%" }]}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Promo Codes</Text>
+                  <Text style={styles.modalTitle}>
+                    {showManualInput ? "Manual Promo Code" : "Promo Codes"}
+                  </Text>
                   <TouchableOpacity onPress={() => setShowPromoModal(false)}>
                     <Ionicons name="close" size={24} color={Theme.textPrimary} />
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.modalDesc}>
-                  Select a saved promo code or search/type to apply.
-                </Text>
+                {!showManualInput && (
+                  <Text style={styles.modalDesc}>
+                    Select a saved promo code or search/type to apply.
+                  </Text>
+                )}
 
                 {showManualInput ? (
                   <View style={{ width: "100%", marginBottom: 10 }}>
@@ -2807,6 +2839,49 @@ export default function SummaryScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
+
+                    {loadingManualPromos ? (
+                      <ActivityIndicator size="small" color={Theme.primary} style={{ marginVertical: 10 }} />
+                    ) : (
+                      manualPromos.length > 0 && (
+                        <View style={{ marginBottom: 15, width: "100%" }}>
+                          <Text style={{ fontFamily: Fonts.medium, fontSize: 13, color: Theme.textSecondary, marginBottom: 8 }}>
+                            Available Promos (tap to select):
+                          </Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 5 }}>
+                            {manualPromos.map((p) => {
+                              const discountDisplay = p.DiscountType === "PERCENTAGE" ? `${p.DiscountValue}%` : `${currencySymbol}${Number(p.DiscountValue).toFixed(2)}`;
+                              return (
+                                <TouchableOpacity
+                                  key={p.PromoCode}
+                                  style={{
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
+                                    borderRadius: 20,
+                                    backgroundColor: Theme.bgMuted,
+                                    borderWidth: 1,
+                                    borderColor: Theme.border,
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    gap: 6,
+                                  }}
+                                  onPress={() => {
+                                    setManualCode(p.PromoCode);
+                                  }}
+                                >
+                                  <Text style={{ fontFamily: Fonts.bold, fontSize: 13, color: Theme.primary }}>
+                                    {p.PromoCode}
+                                  </Text>
+                                  <Text style={{ fontFamily: Fonts.regular, fontSize: 12, color: Theme.textSecondary }}>
+                                    ({discountDisplay})
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )
+                    )}
 
                     <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
                       <TouchableOpacity

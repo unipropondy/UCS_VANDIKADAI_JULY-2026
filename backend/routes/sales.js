@@ -3206,4 +3206,21 @@ router.post("/validate-manual-promo", async (req, res) => {
   }
 });
 
+// Get all active manual promo codes
+router.get("/manual-promos", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT PromoCode, PromoName, DiscountType, DiscountValue 
+      FROM PromoCodeMaster 
+      WHERE IsActive = 1 AND UsedCount < MaxUsage
+      ORDER BY PromoCode
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[GET MANUAL PROMOS ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
