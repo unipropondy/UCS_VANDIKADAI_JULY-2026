@@ -85,6 +85,10 @@ router.post("/login", async (req, res) => {
         try {
           const decoded = Buffer.from(cand, "base64").toString("utf-8").trim();
           if (decoded === password) { isValid = true; needsRehash = true; break; }
+          
+          // Fallback check for double-encoded base64 passwords
+          const doubleDecoded = Buffer.from(decoded, "base64").toString("utf-8").trim();
+          if (doubleDecoded === password) { isValid = true; needsRehash = true; break; }
         } catch (e) {}
       }
     }
