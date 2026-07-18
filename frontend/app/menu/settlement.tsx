@@ -43,27 +43,12 @@ function CustomDateTimePicker({ visible, onClose, selectedDate, onApply, title }
 
   const [viewDate, setViewDate] = useState(() => new Date(selectedDate));
   const [selectedDay, setSelectedDay] = useState(() => new Date(selectedDate));
-  
-  // Time states
-  const [hour, setHour] = useState(() => {
-    let h = selectedDate.getHours();
-    h = h % 12;
-    return h === 0 ? 12 : h;
-  });
-  const [minute, setMinute] = useState(() => selectedDate.getMinutes());
-  const [amPm, setAmPm] = useState<"AM" | "PM">(() => selectedDate.getHours() >= 12 ? "PM" : "AM");
 
   // Sync state when selectedDate changes or modal opens
   useEffect(() => {
     if (visible) {
       setViewDate(new Date(selectedDate));
       setSelectedDay(new Date(selectedDate));
-      let h = selectedDate.getHours();
-      const ampm = h >= 12 ? "PM" : "AM";
-      h = h % 12;
-      setHour(h === 0 ? 12 : h);
-      setMinute(selectedDate.getMinutes());
-      setAmPm(ampm);
     }
   }, [visible, selectedDate]);
 
@@ -122,32 +107,8 @@ function CustomDateTimePicker({ visible, onClose, selectedDate, onApply, title }
     setSelectedDay(new Date(dayObj.year, dayObj.month, dayObj.day));
   };
 
-  // Time adjustment helpers
-  const adjustHour = (amount: number) => {
-    setHour(prev => {
-      let next = prev + amount;
-      if (next > 12) return 1;
-      if (next < 1) return 12;
-      return next;
-    });
-  };
-
-  const adjustMinute = (amount: number) => {
-    setMinute(prev => {
-      let next = prev + amount;
-      if (next > 59) return 0;
-      if (next < 0) return 59;
-      return next;
-    });
-  };
-
   const handleApply = () => {
     const finalDate = new Date(selectedDay);
-    let finalHours = hour % 12;
-    if (amPm === "PM") {
-      finalHours += 12;
-    }
-    finalDate.setHours(finalHours, minute, 0, 0);
     onApply(finalDate);
     onClose();
   };
@@ -156,9 +117,7 @@ function CustomDateTimePicker({ visible, onClose, selectedDate, onApply, title }
     const d = selectedDay.getDate().toString().padStart(2, '0');
     const m = (selectedDay.getMonth() + 1).toString().padStart(2, '0');
     const y = selectedDay.getFullYear();
-    const h = hour.toString().padStart(2, '0');
-    const minStr = minute.toString().padStart(2, '0');
-    return `${d}-${m}-${y} ${h}:${minStr} ${amPm}`;
+    return `${d}-${m}-${y}`;
   };
 
   const monthNames = [
@@ -186,9 +145,9 @@ function CustomDateTimePicker({ visible, onClose, selectedDate, onApply, title }
             showsVerticalScrollIndicator={false}
           >
             {/* Columns Container */}
-            <View style={{ flexDirection: isTablet ? 'row' : 'column', gap: 20 }}>
-              {/* Left Side: Calendar */}
-              <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'column', gap: 14 }}>
+              {/* Calendar Grid */}
+              <View style={{ width: '100%' }}>
                 {/* Calendar Navigator */}
                 <View style={pickerStyles.calNavigator}>
                   <TouchableOpacity onPress={prevMonth} style={pickerStyles.navBtn}>
@@ -236,63 +195,10 @@ function CustomDateTimePicker({ visible, onClose, selectedDate, onApply, title }
                 </View>
               </View>
 
-              {/* Vertical Divider */}
-              {isTablet && <View style={pickerStyles.verticalDivider} />}
-
-              {/* Right Side: Time */}
-              <View style={[pickerStyles.timePanel, !isTablet && { width: '100%', marginTop: 10 }]}>
-                <Text style={pickerStyles.setTimeTitle}>SET TIME</Text>
-
-                {/* Picker Blocks */}
-                <View style={pickerStyles.timePickersRow}>
-                  {/* Hour */}
-                  <View style={pickerStyles.timeBlock}>
-                    <TouchableOpacity onPress={() => adjustHour(1)} style={pickerStyles.arrowBtn}>
-                      <Ionicons name="chevron-up" size={18} color="#44403C" />
-                    </TouchableOpacity>
-                    <View style={pickerStyles.timeInputBox}>
-                      <Text style={pickerStyles.timeValueText}>{hour.toString().padStart(2, '0')}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => adjustHour(-1)} style={pickerStyles.arrowBtn}>
-                      <Ionicons name="chevron-down" size={18} color="#44403C" />
-                    </TouchableOpacity>
-                    <Text style={pickerStyles.timeLabel}>Hour</Text>
-                  </View>
-
-                  {/* Separator */}
-                  <Text style={pickerStyles.timeSeparator}>:</Text>
-
-                  {/* Minute */}
-                  <View style={pickerStyles.timeBlock}>
-                    <TouchableOpacity onPress={() => adjustMinute(1)} style={pickerStyles.arrowBtn}>
-                      <Ionicons name="chevron-up" size={18} color="#44403C" />
-                    </TouchableOpacity>
-                    <View style={pickerStyles.timeInputBox}>
-                      <Text style={pickerStyles.timeValueText}>{minute.toString().padStart(2, '0')}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => adjustMinute(-1)} style={pickerStyles.arrowBtn}>
-                      <Ionicons name="chevron-down" size={18} color="#44403C" />
-                    </TouchableOpacity>
-                    <Text style={pickerStyles.timeLabel}>Min</Text>
-                  </View>
-
-                  {/* AM/PM */}
-                  <View style={[pickerStyles.timeBlock, { justifyContent: 'center' }]}>
-                    <TouchableOpacity 
-                      onPress={() => setAmPm(prev => prev === "AM" ? "PM" : "AM")} 
-                      style={[pickerStyles.ampmBtn, pickerStyles.ampmBtnActive]}
-                    >
-                      <Text style={pickerStyles.ampmBtnTextActive}>{amPm}</Text>
-                    </TouchableOpacity>
-                    <Text style={[pickerStyles.timeLabel, { marginTop: 12 }]}>AM/PM</Text>
-                  </View>
-                </View>
-
-                {/* Summary Display */}
-                <View style={pickerStyles.summaryCard}>
-                  <Text style={pickerStyles.summaryLabel}>Selected Date-Time:</Text>
-                  <Text style={pickerStyles.summaryValue}>{formatSummaryStr()}</Text>
-                </View>
+              {/* Summary Display */}
+              <View style={pickerStyles.summaryCard}>
+                <Text style={pickerStyles.summaryLabel}>Selected Date:</Text>
+                <Text style={pickerStyles.summaryValue}>{formatSummaryStr()}</Text>
               </View>
             </View>
           </ScrollView>
@@ -327,7 +233,7 @@ const pickerStyles = StyleSheet.create({
   modalContainer: {
     backgroundColor: '#fff',
     borderRadius: 20,
-    width: 620,
+    width: 340,
     maxWidth: '95%',
     padding: 24,
     ...Platform.select({
@@ -677,13 +583,7 @@ const [artistSearch, setArtistSearch] = useState("");
     const d = date.getDate().toString().padStart(2, '0');
     const m = (date.getMonth() + 1).toString().padStart(2, '0');
     const y = date.getFullYear();
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const h = hours.toString().padStart(2, '0');
-    return `${d}-${m}-${y} ${h}:${minutes} ${ampm}`;
+    return `${d}-${m}-${y}`;
   };
 
   const handleCountChange = (denomStr: string, val: string) => {
@@ -1615,15 +1515,23 @@ const loadDishes = async () => {
               visible={showFromPicker}
               onClose={() => setShowFromPicker(false)}
               selectedDate={fromDate}
-              onApply={(date) => setFromDate(date)}
-              title="Select Start Date & Time"
+              onApply={(date) => {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+                setFromDate(d);
+              }}
+              title="Select Start Date"
             />
             <CustomDateTimePicker
               visible={showToPicker}
               onClose={() => setShowToPicker(false)}
               selectedDate={toDate}
-              onApply={(date) => setToDate(date)}
-              title="Select End Date & Time"
+              onApply={(date) => {
+                const d = new Date(date);
+                d.setHours(23, 59, 59, 999);
+                setToDate(d);
+              }}
+              title="Select End Date"
             />
           </View>
 

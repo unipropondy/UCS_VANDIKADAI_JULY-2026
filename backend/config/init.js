@@ -333,6 +333,38 @@ async function initDB(pool) {
     await runQuery("CompanySettings - SVCIdentification", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CompanySettings]') AND name = 'SVCIdentification') ALTER TABLE [dbo].[CompanySettings] ADD SVCIdentification BIT NOT NULL DEFAULT 1");
     await runQuery("CompanySettings - TakeawayCharges", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CompanySettings]') AND name = 'TakeawayCharges') ALTER TABLE [dbo].[CompanySettings] ADD TakeawayCharges DECIMAL(18, 2) DEFAULT 0");
     await runQuery("CompanySettings - LastBridgeHeartbeat", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[CompanySettings]') AND name = 'LastBridgeHeartbeat') ALTER TABLE [dbo].[CompanySettings] ADD LastBridgeHeartbeat DATETIME");
+    // 10.5 AppSettings
+    await runQuery("Create AppSettings table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[AppSettings](
+              [UPI_ID] [nvarchar](100) NULL,
+              [ShopName] [nvarchar](255) NULL,
+              [PayNow_QR_Url] [nvarchar](max) NULL,
+              [EnableKOT] [bit] NOT NULL DEFAULT 1,
+              [EnableKDS] [bit] NOT NULL DEFAULT 1,
+              [EnableCheckoutBill] [bit] NOT NULL DEFAULT 1,
+              [EnableCheckoutFlow] [bit] NOT NULL DEFAULT 1,
+              [EnableDirectProcessToPay] [bit] NOT NULL DEFAULT 0,
+              [CustomerSideDisplay] [bit] NOT NULL DEFAULT 1,
+              [EnableGuestDetailsPopup] [bit] NOT NULL DEFAULT 1,
+              [EnableCashDrawer] [bit] NOT NULL DEFAULT 1,
+              [EnableKDSPrint] [bit] NOT NULL DEFAULT 1,
+              [SVCIdentification] [bit] NOT NULL DEFAULT 1,
+              [EnableCombo] [bit] NOT NULL DEFAULT 1,
+              [ShowLoyalty] [bit] NOT NULL DEFAULT 1,
+              [ShowRewardPoints] [bit] NOT NULL DEFAULT 1,
+              [ShowPromoCode] [bit] NOT NULL DEFAULT 1,
+              [EnableComboPrint] [bit] NOT NULL DEFAULT 1,
+              [UpdatedOn] [datetime] DEFAULT GETDATE()
+          );
+          
+          -- Seed initial row
+          INSERT INTO [dbo].[AppSettings] (ShopName, EnableKOT, EnableKDS, EnableCheckoutBill)
+          VALUES ('Vandikadai POS', 1, 1, 1);
+      END
+    `);
+
     await runQuery("AppSettings - EnableCheckoutFlow", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'EnableCheckoutFlow') ALTER TABLE [dbo].[AppSettings] ADD EnableCheckoutFlow BIT NOT NULL DEFAULT 1");
     await runQuery("AppSettings - EnableDirectProcessToPay", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'EnableDirectProcessToPay') ALTER TABLE [dbo].[AppSettings] ADD EnableDirectProcessToPay BIT NOT NULL DEFAULT 0");
     await runQuery("AppSettings - CustomerSideDisplay", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[AppSettings]') AND name = 'CustomerSideDisplay') ALTER TABLE [dbo].[AppSettings] ADD CustomerSideDisplay BIT NOT NULL DEFAULT 1");
@@ -828,6 +860,22 @@ async function initDB(pool) {
       END
     `);
 
+    // 25.5 Create CustomerDishLoyaltyState table
+    await runQuery("Create CustomerDishLoyaltyState table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[CustomerDishLoyaltyState]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[CustomerDishLoyaltyState](
+              [CustomerId] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES LoyaltyCustomer(LoyaltyCustomerId) ON DELETE CASCADE,
+              [RuleId] UNIQUEIDENTIFIER NOT NULL, -- FK validation removed to avoid constraints order issues
+              [CurrentCount] INT NOT NULL DEFAULT 0,
+              [RewardsAvailable] INT NOT NULL DEFAULT 0,
+              [RewardCyclesCompleted] INT NOT NULL DEFAULT 0,
+              [LastUpdated] DATETIME DEFAULT GETDATE(),
+              PRIMARY KEY (CustomerId, RuleId)
+          );
+      END
+    `);
+
     // 26. Create PrintReport table
     await runQuery("Create PrintReport table", `
       IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PrintReport]') AND type in (N'U'))
@@ -839,6 +887,40 @@ async function initDB(pool) {
               [PrintType] [int] NULL,
               [orderDate] [datetime] DEFAULT GETDATE()
           )
+      END
+    `);
+
+    // 24.1 Create LoyaltyCampaign table
+    await runQuery("Create LoyaltyCampaign table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyCampaign]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[LoyaltyCampaign](
+              [CampaignId] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+              [Name] NVARCHAR(100) NOT NULL,
+              [StartDate] DATETIME NOT NULL,
+              [EndDate] DATETIME NOT NULL,
+              [IsActive] BIT NOT NULL DEFAULT 1,
+              [CreatedOn] DATETIME DEFAULT GETDATE()
+          );
+      END
+    `);
+
+    // 24.2 Create LoyaltyRule table
+    await runQuery("Create LoyaltyRule table", `
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoyaltyRule]') AND type in (N'U'))
+      BEGIN
+          CREATE TABLE [dbo].[LoyaltyRule](
+              [RuleId] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+              [CampaignId] UNIQUEIDENTIFIER NOT NULL FOREIGN KEY REFERENCES LoyaltyCampaign(CampaignId),
+              [LoyaltyType] NVARCHAR(50) NOT NULL DEFAULT 'Dish',
+              [PurchaseDishId] UNIQUEIDENTIFIER NULL,
+              [PurchaseDishGroupId] UNIQUEIDENTIFIER NULL,
+              [RewardDishId] UNIQUEIDENTIFIER NULL,
+              [RewardDishGroupId] UNIQUEIDENTIFIER NULL,
+              [RequiredBills] INT NOT NULL DEFAULT 1,
+              [IsActive] BIT NOT NULL DEFAULT 1,
+              [CreatedOn] DATETIME DEFAULT GETDATE()
+          );
       END
     `);
 
@@ -978,6 +1060,37 @@ async function initDB(pool) {
           CREATE NONCLUSTERED INDEX IX_ComboGroupDishMapping_ComboGroupId ON [dbo].[ComboGroupDishMapping](ComboGroupId);
       END
     `);
+
+    // 🚀 StartDate alterations for historical day queries
+    const tablesToAlterForStartDate = [
+      "SettlementHeader",
+      "RestaurantInvoice",
+      "Restaurantmodifierdetail",
+      "RestaurantmodifierdetailCur",
+      "RestaurantOrderDetail",
+      "RestaurantOrder",
+      "RestaurantInvoiceCur",
+      "PaymentDetailCur",
+      "PaymentDetail",
+      "RestaurantOrderCur",
+      "RestaurantOrderDetailCur",
+      "Settlementitemdetail",
+      "OpeningCashDenomination",
+      "ArtistCashBox",
+      "CashOutEntry"
+    ];
+
+    for (const tableName of tablesToAlterForStartDate) {
+      await runQuery(`Alter ${tableName} - start_date`, `
+        IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[${tableName}]') AND type in (N'U'))
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[${tableName}]') AND name = 'start_date')
+            BEGIN
+                ALTER TABLE [dbo].[${tableName}] ADD start_date DATE NULL
+            END
+        END
+      `);
+    }
 
     console.log("✅ Database schema and performance indexes are up to date. (Rewards system active)");
 
