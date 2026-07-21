@@ -1319,7 +1319,7 @@ export default function PaymentScreen() {
       totalAmount: total,
       paymentMethod: payments && payments.length > 0 ? "SPLIT" : method.trim(),
       payments: payments || null,
-      memberId: memberOverride?.MemberId || selectedMember?.MemberId || null,
+      memberId: memberOverride?.MemberId || selectedMember?.MemberId || discount?.memberId || null,
       roundOff: displayedRoundOff,
       cashierId: user?.userId,
       tableId: context?.tableId,

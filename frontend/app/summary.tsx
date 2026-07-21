@@ -682,6 +682,7 @@ export default function SummaryScreen() {
         type: "fixed" as const,
         value: promoAmount,
         label: `Promo: ${code.trim()}`,
+        memberId: data.MemberId || null,
       };
       applyDiscount(discountData);
 

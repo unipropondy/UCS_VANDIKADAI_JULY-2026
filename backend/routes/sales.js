@@ -2176,29 +2176,47 @@ router.post("/save", async (req, res) => {
         const promoCode = discountRemarks.substring(6).trim();
         console.log(`[SAVE SALE] Processing promo code: ${promoCode}, Amount: ${orderDiscountAmount}`);
         
-        const checkManualRes = await transaction.request()
+        const memberPromoCheck = await transaction.request()
           .input("PromoCode", sql.NVarChar(100), promoCode)
-          .query("SELECT PromoId FROM PromoCodeMaster WHERE PromoCode = @PromoCode");
-
-        if (checkManualRes.recordset.length > 0) {
-          console.log(`[SAVE SALE] Incrementing UsedCount in PromoCodeMaster for manual promo: ${promoCode}`);
-          await transaction.request()
-            .input("PromoCode", sql.NVarChar(100), promoCode)
-            .query(`
-              UPDATE PromoCodeMaster 
-              SET UsedCount = UsedCount + 1 
-              WHERE PromoCode = @PromoCode
-            `);
+          .query("SELECT MemberId FROM MemberMaster WHERE Promocode = @PromoCode AND IsActive = 1");
+        
+        if (memberPromoCheck.recordset.length > 0) {
+          if (memberId) {
+            console.log(`[SAVE SALE] Deducting Promo Code amount from MemberMaster for MemberId: ${memberId}, code: ${promoCode}`);
+            await transaction.request()
+              .input("MemberId", sql.UniqueIdentifier, memberId)
+              .input("DeductAmount", sql.Decimal(18, 2), orderDiscountAmount)
+              .query(`
+                UPDATE MemberMaster 
+                SET Promoamount = CASE WHEN Promoamount - @DeductAmount < 0 THEN 0 ELSE Promoamount - @DeductAmount END 
+                WHERE MemberId = @MemberId
+              `);
+          } else {
+            console.log(`[SAVE SALE] Deducting Promo Code amount from MemberMaster (fallback) for code: ${promoCode}`);
+            await transaction.request()
+              .input("PromoCode", sql.NVarChar(100), promoCode)
+              .input("DeductAmount", sql.Decimal(18, 2), orderDiscountAmount)
+              .query(`
+                UPDATE MemberMaster 
+                SET Promoamount = CASE WHEN Promoamount - @DeductAmount < 0 THEN 0 ELSE Promoamount - @DeductAmount END 
+                WHERE Promocode = @PromoCode AND IsActive = 1
+              `);
+          }
         } else {
-          console.log(`[SAVE SALE] Deducting Promo Code amount from MemberMaster for code: ${promoCode}`);
-          await transaction.request()
+          const checkManualRes = await transaction.request()
             .input("PromoCode", sql.NVarChar(100), promoCode)
-            .input("DeductAmount", sql.Decimal(18, 2), orderDiscountAmount)
-            .query(`
-              UPDATE MemberMaster 
-              SET Promoamount = CASE WHEN Promoamount - @DeductAmount < 0 THEN 0 ELSE Promoamount - @DeductAmount END 
-              WHERE Promocode = @PromoCode AND IsActive = 1
-            `);
+            .query("SELECT PromoId FROM PromoCodeMaster WHERE PromoCode = @PromoCode");
+
+          if (checkManualRes.recordset.length > 0) {
+            console.log(`[SAVE SALE] Incrementing UsedCount in PromoCodeMaster for manual promo: ${promoCode}`);
+            await transaction.request()
+              .input("PromoCode", sql.NVarChar(100), promoCode)
+              .query(`
+                UPDATE PromoCodeMaster 
+                SET UsedCount = UsedCount + 1 
+                WHERE PromoCode = @PromoCode
+              `);
+          }
         }
       }
 
