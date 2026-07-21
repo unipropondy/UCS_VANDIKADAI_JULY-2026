@@ -1123,10 +1123,11 @@ export default function PaymentScreen() {
         setShowMemberModal(true);
         return;
       }
+      const promoDeduction = (discount?.applied && discount?.label && selectedMember.Promocode && discount.label.toLowerCase().includes(selectedMember.Promocode.toLowerCase())) ? (discount.value || 0) : 0;
       const availableBalance =
-        selectedMember.AvailableCredit !== undefined
+        (selectedMember.AvailableCredit !== undefined
           ? selectedMember.AvailableCredit
-          : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0);
+          : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0)) - promoDeduction;
       const isLimitExceeded = total > availableBalance;
       if (isLimitExceeded) {
         const isAdminOrManager =
@@ -2530,10 +2531,11 @@ export default function PaymentScreen() {
                               </View>
 
                               {(() => {
+                                const promoDeduction = (discount?.applied && discount?.label && selectedMember.Promocode && discount.label.toLowerCase().includes(selectedMember.Promocode.toLowerCase())) ? (discount.value || 0) : 0;
                                 const selectedAvailCredit =
-                                  selectedMember.AvailableCredit !== undefined
+                                  (selectedMember.AvailableCredit !== undefined
                                     ? selectedMember.AvailableCredit
-                                    : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0);
+                                    : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0)) - promoDeduction;
                                 const isSelectedLimitExceeded = total > selectedAvailCredit;
                                 return (
                                 <View style={styles.creditCardStatsRow}>
@@ -2584,10 +2586,11 @@ export default function PaymentScreen() {
                             })()}
 
                             {(() => {
+                              const promoDeduction = (discount?.applied && discount?.label && selectedMember.Promocode && discount.label.toLowerCase().includes(selectedMember.Promocode.toLowerCase())) ? (discount.value || 0) : 0;
                               const selectedAvailCredit =
-                                selectedMember.AvailableCredit !== undefined
+                                (selectedMember.AvailableCredit !== undefined
                                   ? selectedMember.AvailableCredit
-                                  : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0);
+                                  : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0)) - promoDeduction;
                               const isSelectedLimitExceeded = total > selectedAvailCredit;
                               return isSelectedLimitExceeded ? (
                                 <View style={styles.limitExceededBanner}>
@@ -3568,10 +3571,10 @@ export default function PaymentScreen() {
                           members.map((item) => {
                             const isSelected =
                               selectedMember?.MemberId === item.MemberId;
-                            const remainingCredit =
-                              item.AvailableCredit !== undefined
+                            const promoDeduction = (discount?.applied && discount?.label && item.Promocode && discount.label.toLowerCase().includes(item.Promocode.toLowerCase())) ? (discount.value || 0) : 0;
+                            const remainingCredit = (item.AvailableCredit !== undefined
                                 ? item.AvailableCredit
-                                : ((item.CreditLimit || 0) > 0 ? ((item.CreditLimit || 0) - (item.CurrentBalance || 0)) : (item.CurrentBalance || 0)) + (item.Promoamount || 0);
+                                : ((item.CreditLimit || 0) > 0 ? ((item.CreditLimit || 0) - (item.CurrentBalance || 0)) : (item.CurrentBalance || 0)) + (item.Promoamount || 0)) - promoDeduction;
                             const isLimitExceeded = total > remainingCredit;
                             return (
                               <TouchableOpacity
