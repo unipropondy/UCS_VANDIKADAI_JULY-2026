@@ -62,14 +62,14 @@ async function sendBalanceNotification(memberId, pool) {
     const result = await pool
       .request()
       .input("Id", sql.UniqueIdentifier, memberId)
-      .query("SELECT Name, Phone, CreditLimit, CurrentBalance FROM MemberMaster WHERE MemberId = @Id");
+      .query("SELECT Name, Phone, CreditLimit, CurrentBalance, Promoamount FROM MemberMaster WHERE MemberId = @Id");
 
     if (!result.recordset || result.recordset.length === 0) {
       console.warn(`[WhatsApp] Member ${memberId} not found – notification skipped.`);
       return;
     }
 
-    const { Name, Phone, CreditLimit, CurrentBalance } = result.recordset[0];
+    const { Name, Phone, CreditLimit, CurrentBalance, Promoamount } = result.recordset[0];
     if (!Phone || Phone.trim() === "") {
       console.warn(`[WHATSAPP] Notification skipped - phone number missing`);
       return;
@@ -77,7 +77,8 @@ async function sendBalanceNotification(memberId, pool) {
 
     const creditLimit = Number(CreditLimit) || 0;
     const currentBalance = Number(CurrentBalance) || 0;
-    const availableBalance = creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance;
+    const promoAmount = Number(Promoamount) || 0;
+    const availableBalance = (creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance) + promoAmount;
 
     const formattedAvailable = availableBalance.toFixed(2);
     const formattedCreditLimit = creditLimit.toFixed(2);

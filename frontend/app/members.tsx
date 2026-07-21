@@ -274,7 +274,8 @@ export default function MembersScreen() {
     
     const creditLimit = member.CreditLimit || 0;
     const currentBalance = member.CurrentBalance || 0;
-    const availableBalance = creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance;
+    const promoAmount = member.Promoamount || 0;
+    const availableBalance = (creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance) + promoAmount;
 
     const formattedAvailable = availableBalance.toFixed(2);
     const formattedCreditLimit = creditLimit.toFixed(2);
@@ -457,7 +458,8 @@ export default function MembersScreen() {
     const creditLimit    = item.CreditLimit    || 0;
     const currentBalance = item.CurrentBalance || 0;
     const totalBalance   = item.Balance        || 0;
-    const availableCredit = item.AvailableCredit !== undefined ? item.AvailableCredit : (creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance);
+    const promoAmount = item.Promoamount || 0;
+    const availableCredit = item.AvailableCredit !== undefined ? item.AvailableCredit : (creditLimit > 0 ? (creditLimit - currentBalance) : currentBalance) + promoAmount;
     const isLowCredit    = availableCredit < 50;
     const alertSent      = item.LowBalanceAlertSent === true || item.LowBalanceAlertSent === 1;
 

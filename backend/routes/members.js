@@ -70,7 +70,7 @@ router.post("/add", async (req, res) => {
         Phone: phone,
         CreditLimit: parseFloat(creditLimit) || 0,
         CurrentBalance: parseFloat(currentBalance) || 0,
-        AvailableCredit: (parseFloat(creditLimit) || 0) > 0 ? ((parseFloat(creditLimit) || 0) - (parseFloat(currentBalance) || 0)) : (parseFloat(currentBalance) || 0),
+        AvailableCredit: ((parseFloat(creditLimit) || 0) > 0 ? ((parseFloat(creditLimit) || 0) - (parseFloat(currentBalance) || 0)) : (parseFloat(currentBalance) || 0)) + (parseFloat(promoamount) || 0),
         IsActive: isActive !== undefined ? isActive : 1,
         Promocode: promocode || null,
         Promoamount: parseFloat(promoamount) || 0
@@ -212,7 +212,7 @@ router.get("/stats", async (req, res) => {
         -- Active members count
         (SELECT COUNT(*) FROM MemberMaster WHERE IsActive = 1) AS totalActiveMembers,
         -- Total available balance across all active members
-        (SELECT ISNULL(SUM(CurrentBalance), 0) FROM MemberMaster WHERE IsActive = 1) AS totalAvailableBalance,
+        (SELECT ISNULL(SUM(AvailableCredit), 0) FROM MemberMaster WHERE IsActive = 1) AS totalAvailableBalance,
         -- Recharges added this calendar month (RECHARGE transactions in CCT linked to MemberMaster)
         (
           SELECT ISNULL(SUM(cct.PaidAmount), 0)

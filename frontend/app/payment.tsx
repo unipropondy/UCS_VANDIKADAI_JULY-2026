@@ -1126,7 +1126,7 @@ export default function PaymentScreen() {
       const availableBalance =
         selectedMember.AvailableCredit !== undefined
           ? selectedMember.AvailableCredit
-          : (selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0);
+          : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0);
       const isLimitExceeded = total > availableBalance;
       if (isLimitExceeded) {
         const isAdminOrManager =
@@ -2533,8 +2533,7 @@ export default function PaymentScreen() {
                                 const selectedAvailCredit =
                                   selectedMember.AvailableCredit !== undefined
                                     ? selectedMember.AvailableCredit
-                                    : (selectedMember.CreditLimit || 0) -
-                                      (selectedMember.CurrentBalance || 0);
+                                    : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0);
                                 const isSelectedLimitExceeded = total > selectedAvailCredit;
                                 return (
                                 <View style={styles.creditCardStatsRow}>
@@ -2588,8 +2587,7 @@ export default function PaymentScreen() {
                               const selectedAvailCredit =
                                 selectedMember.AvailableCredit !== undefined
                                   ? selectedMember.AvailableCredit
-                                  : (selectedMember.CreditLimit || 0) -
-                                    (selectedMember.CurrentBalance || 0);
+                                  : ((selectedMember.CreditLimit || 0) > 0 ? ((selectedMember.CreditLimit || 0) - (selectedMember.CurrentBalance || 0)) : (selectedMember.CurrentBalance || 0)) + (selectedMember.Promoamount || 0);
                               const isSelectedLimitExceeded = total > selectedAvailCredit;
                               return isSelectedLimitExceeded ? (
                                 <View style={styles.limitExceededBanner}>
@@ -3573,8 +3571,7 @@ export default function PaymentScreen() {
                             const remainingCredit =
                               item.AvailableCredit !== undefined
                                 ? item.AvailableCredit
-                                : (item.CreditLimit || 0) -
-                                  (item.CurrentBalance || 0);
+                                : ((item.CreditLimit || 0) > 0 ? ((item.CreditLimit || 0) - (item.CurrentBalance || 0)) : (item.CurrentBalance || 0)) + (item.Promoamount || 0);
                             const isLimitExceeded = total > remainingCredit;
                             return (
                               <TouchableOpacity

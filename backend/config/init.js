@@ -61,27 +61,27 @@ async function initDB(pool) {
     await runQuery("MemberMaster - Promocode", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'Promocode') ALTER TABLE [dbo].[MemberMaster] ADD Promocode NVARCHAR(100) NULL");
     await runQuery("MemberMaster - Promoamount", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'Promoamount') ALTER TABLE [dbo].[MemberMaster] ADD Promoamount DECIMAL(18,2) NULL");
     // AvailableCredit computed column — only add if it doesn't exist yet
-    await runQuery("MemberMaster - AvailableCredit", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'AvailableCredit') ALTER TABLE [dbo].[MemberMaster] ADD AvailableCredit AS (CASE WHEN CreditLimit > 0 THEN (CreditLimit - CurrentBalance) ELSE CurrentBalance END)");
+    await runQuery("MemberMaster - AvailableCredit", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'AvailableCredit') ALTER TABLE [dbo].[MemberMaster] ADD AvailableCredit AS (CASE WHEN CreditLimit > 0 THEN (CreditLimit - CurrentBalance) ELSE CurrentBalance END + ISNULL(RewardCredit, 0) + ISNULL(Promoamount, 0))");
 
     // 🏆 REWARD POINTS: Add RewardCredit wallet column to MemberMaster
     await runQuery("MemberMaster - RewardCredit", "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'RewardCredit') ALTER TABLE [dbo].[MemberMaster] ADD RewardCredit DECIMAL(18,4) NOT NULL DEFAULT 0");
 
-    // 🏆 REWARD POINTS: Drop and recreate AvailableCredit computed column to include RewardCredit
-    // This updates the formula so AvailableCredit = credit capacity + reward wallet
+    // 🏆 REWARD POINTS: Drop and recreate AvailableCredit computed column to include RewardCredit and Promoamount
+    // This updates the formula so AvailableCredit = credit capacity + reward wallet + promo wallet
     await runQuery("MemberMaster - AvailableCredit (Reward-aware)", `
       IF EXISTS (SELECT * FROM sys.computed_columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'AvailableCredit')
       BEGIN
         -- Only rebuild if RewardCredit column now exists (safe guard)
         IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'RewardCredit')
         BEGIN
-          -- Check if the formula already includes RewardCredit (avoid repeated DROP/ADD)
+          -- Check if the formula already includes RewardCredit and Promoamount (avoid repeated DROP/ADD)
           DECLARE @existingDef NVARCHAR(MAX);
           SELECT @existingDef = definition FROM sys.computed_columns
           WHERE object_id = OBJECT_ID(N'[dbo].[MemberMaster]') AND name = 'AvailableCredit';
-          IF @existingDef NOT LIKE '%RewardCredit%'
+          IF @existingDef NOT LIKE '%RewardCredit%' OR @existingDef NOT LIKE '%Promoamount%'
           BEGIN
             ALTER TABLE [dbo].[MemberMaster] DROP COLUMN AvailableCredit;
-            ALTER TABLE [dbo].[MemberMaster] ADD AvailableCredit AS (CASE WHEN CreditLimit > 0 THEN (CreditLimit - CurrentBalance) ELSE 0 END + ISNULL(RewardCredit, 0));
+            ALTER TABLE [dbo].[MemberMaster] ADD AvailableCredit AS (CASE WHEN CreditLimit > 0 THEN (CreditLimit - CurrentBalance) ELSE CurrentBalance END + ISNULL(RewardCredit, 0) + ISNULL(Promoamount, 0));
           END
         END
       END
