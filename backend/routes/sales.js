@@ -32,7 +32,7 @@ const { runInTransaction } = require("../utils/transactionHelper");
 const { getActiveOrganization } = require("../utils/organizationHelper");
 const { processSplitPayments } = require("../services/payment.service");
 const { getBusinessDaySqlBounds } = require("../utils/timezoneHelper");
-const { getBusinessTimezoneSettings, getCompanySettings } = require("../utils/settingsCache");
+const { getBusinessTimezoneSettings, getCompanySettings, getAppSettings } = require("../utils/settingsCache");
 const { sendBalanceNotification } = require("../utils/whatsappService");
 const PaymentService = require('../services/payment.service');
 
@@ -1436,6 +1436,16 @@ router.post("/save", async (req, res) => {
     if (validationError) {
       console.warn(`[SAVE SALE] Validation failed: ${validationError}`);
       return res.status(400).json({ error: validationError });
+    }
+
+    // Enforce minimum subtotal for promo codes dynamically
+    if (discountRemarks && discountRemarks.startsWith("Promo:") && (parseFloat(orderDiscountAmount) > 0 || parseFloat(discountAmount) > 0)) {
+      const appSettings = await getAppSettings();
+      const promoMinSubtotal = appSettings && appSettings.PromoMinSubtotal !== undefined ? parseFloat(appSettings.PromoMinSubtotal) : 10.00;
+      const orderSubtotal = parseFloat(subTotal) || 0;
+      if (orderSubtotal < promoMinSubtotal) {
+        return res.status(400).json({ error: `Promo code can only be used for orders of $${promoMinSubtotal.toFixed(2)} or more` });
+      }
     }
 
     // 1. Idempotency Check: Verify if this settlement already exists

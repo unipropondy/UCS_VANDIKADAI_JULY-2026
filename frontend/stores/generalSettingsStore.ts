@@ -19,6 +19,7 @@ export interface GeneralSettings {
   showRewardPoints: boolean;
   showPromoCode: boolean;
   enableComboPrint: boolean;
+  promoMinSubtotal: number;
   enablePrintPoller?: boolean;
   printPollerUrl?: string;
   printPollerToken?: string;
@@ -51,6 +52,7 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
         showRewardPoints: true,
         showPromoCode: true,
         enableComboPrint: true,
+        promoMinSubtotal: 10.00,
         enablePrintPoller: true,
         printPollerUrl: "https://qr-kindee-production.up.railway.app",
         printPollerToken: "unipro-pos-bridge-token-2026",
@@ -83,6 +85,7 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
                 showRewardPoints: data.ShowRewardPoints !== undefined ? Boolean(data.ShowRewardPoints) : true,
                 showPromoCode: data.ShowPromoCode !== undefined ? Boolean(data.ShowPromoCode) : true,
                 enableComboPrint: data.EnableComboPrint !== undefined ? Boolean(data.EnableComboPrint) : true,
+                promoMinSubtotal: data.PromoMinSubtotal !== undefined ? parseFloat(data.PromoMinSubtotal) : 10.00,
               },
             }));
           }
@@ -127,6 +130,7 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
             showRewardPoints: updatedSettings.showRewardPoints,
             showPromoCode: updatedSettings.showPromoCode,
             enableComboPrint: updatedSettings.enableComboPrint,
+            promoMinSubtotal: updatedSettings.promoMinSubtotal,
           };
 
           const res = await fetch(`${API_URL}/api/settings/update`, {

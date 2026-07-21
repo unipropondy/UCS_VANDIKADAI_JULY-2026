@@ -420,6 +420,7 @@ export default function SummaryScreen() {
   const showLoyalty = useGeneralSettingsStore((s: any) => s.settings.showLoyalty !== false);
   const showRewardPoints = useGeneralSettingsStore((s: any) => s.settings.showRewardPoints !== false);
   const showPromoCode = useGeneralSettingsStore((s: any) => s.settings.showPromoCode !== false);
+  const promoMinSubtotal = useGeneralSettingsStore((s: any) => s.settings.promoMinSubtotal !== undefined ? s.settings.promoMinSubtotal : 10.00);
 
   const currentContextId = useCartStore((s: any) => s.currentContextId);
   const cart = useCartStore((s: any) => (currentContextId ? s.carts[currentContextId] : undefined) || EMPTY_ARRAY);
@@ -653,6 +654,14 @@ export default function SummaryScreen() {
       showToast({ type: "warning", message: "Enter Promo Code" });
       return;
     }
+    if (subtotal < promoMinSubtotal) {
+      showToast({
+        type: "warning",
+        message: "Promo Code Denied",
+        subtitle: `Minimum order of ${currencySymbol}${promoMinSubtotal.toFixed(2)} required`
+      });
+      return;
+    }
     try {
       setIsApplyingPromo(true);
       const token = useAuthStore.getState().token;
@@ -704,6 +713,14 @@ export default function SummaryScreen() {
   const handleManualPromoCode = async (code: string) => {
     if (!code || code.trim() === "") {
       showToast({ type: "warning", message: "Enter Promo Code" });
+      return;
+    }
+    if (subtotal < promoMinSubtotal) {
+      showToast({
+        type: "warning",
+        message: "Promo Code Denied",
+        subtitle: `Minimum order of ${currencySymbol}${promoMinSubtotal.toFixed(2)} required`
+      });
       return;
     }
     try {

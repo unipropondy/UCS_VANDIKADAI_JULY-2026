@@ -65,12 +65,20 @@ router.get("/", async (req, res) => {
       BEGIN
         ALTER TABLE AppSettings ADD EnableComboPrint BIT DEFAULT 1 WITH VALUES;
       END
+      IF NOT EXISTS (
+        SELECT * FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'AppSettings' AND COLUMN_NAME = 'PromoMinSubtotal'
+      )
+      BEGIN
+        ALTER TABLE AppSettings ADD PromoMinSubtotal DECIMAL(18,2) DEFAULT 10.00 WITH VALUES;
+      END
     `).catch(err => console.warn("Failed self-healing AppSettings column:", err.message));
 
     const settings = await getAppSettings();
     res.json({
       ...(settings || {}),
-      SVCIdentification: settings?.SVCIdentification !== undefined ? (settings.SVCIdentification ? 1 : 0) : 1
+      SVCIdentification: settings?.SVCIdentification !== undefined ? (settings.SVCIdentification ? 1 : 0) : 1,
+      PromoMinSubtotal: settings?.PromoMinSubtotal !== undefined ? parseFloat(settings.PromoMinSubtotal) : 10.00
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -80,7 +88,7 @@ router.get("/", async (req, res) => {
 // 🔹 UPDATE Settings
 router.post("/update", async (req, res) => {
   try {
-    const { upiId, shopName, qrCodeUrl, enableKOT, enableKDS, enableCheckoutBill, enableCheckoutFlow, enableDirectProcessToPay, customerSideDisplay, enableGuestDetailsPopup, enableCashDrawer, SVCIdentification, enableKDSPrint, enableCombo, showLoyalty, showRewardPoints, showPromoCode, enableComboPrint } = req.body;
+    const { upiId, shopName, qrCodeUrl, enableKOT, enableKDS, enableCheckoutBill, enableCheckoutFlow, enableDirectProcessToPay, customerSideDisplay, enableGuestDetailsPopup, enableCashDrawer, SVCIdentification, enableKDSPrint, enableCombo, showLoyalty, showRewardPoints, showPromoCode, enableComboPrint, promoMinSubtotal } = req.body;
     const pool = await poolPromise;
 
     // Use an UPSERT logic (Update if exists, Insert if not)
@@ -103,6 +111,7 @@ router.post("/update", async (req, res) => {
       .input("ShowRewardPoints", sql.Bit, showRewardPoints !== undefined ? showRewardPoints : 1)
       .input("ShowPromoCode", sql.Bit, showPromoCode !== undefined ? showPromoCode : 1)
       .input("EnableComboPrint", sql.Bit, enableComboPrint !== undefined ? enableComboPrint : 1)
+      .input("PromoMinSubtotal", sql.Decimal(18, 2), promoMinSubtotal !== undefined ? parseFloat(promoMinSubtotal) : 10.00)
       .query(`
         IF EXISTS (SELECT 1 FROM AppSettings)
         BEGIN
@@ -126,12 +135,13 @@ router.post("/update", async (req, res) => {
             ShowRewardPoints = @ShowRewardPoints,
             ShowPromoCode = @ShowPromoCode,
             EnableComboPrint = @EnableComboPrint,
+            PromoMinSubtotal = @PromoMinSubtotal,
             UpdatedOn = GETDATE()
         END
         ELSE
         BEGIN
-          INSERT INTO AppSettings (UPI_ID, ShopName, PayNow_QR_Url, EnableKOT, EnableKDS, EnableCheckoutBill, EnableCheckoutFlow, EnableDirectProcessToPay, CustomerSideDisplay, EnableGuestDetailsPopup, EnableCashDrawer, EnableKDSPrint, SVCIdentification, EnableCombo, ShowLoyalty, ShowRewardPoints, ShowPromoCode, EnableComboPrint, UpdatedOn)
-          VALUES (@UPI, @Shop, @QR, @EnableKOT, @EnableKDS, @EnableCheckoutBill, @EnableCheckoutFlow, @EnableDirectProcessToPay, @CustomerSideDisplay, @EnableGuestDetailsPopup, @EnableCashDrawer, @EnableKDSPrint, @SVCIdentification, @EnableCombo, @ShowLoyalty, @ShowRewardPoints, @ShowPromoCode, @EnableComboPrint, GETDATE())
+          INSERT INTO AppSettings (UPI_ID, ShopName, PayNow_QR_Url, EnableKOT, EnableKDS, EnableCheckoutBill, EnableCheckoutFlow, EnableDirectProcessToPay, CustomerSideDisplay, EnableGuestDetailsPopup, EnableCashDrawer, EnableKDSPrint, SVCIdentification, EnableCombo, ShowLoyalty, ShowRewardPoints, ShowPromoCode, EnableComboPrint, PromoMinSubtotal, UpdatedOn)
+          VALUES (@UPI, @Shop, @QR, @EnableKOT, @EnableKDS, @EnableCheckoutBill, @EnableCheckoutFlow, @EnableDirectProcessToPay, @CustomerSideDisplay, @EnableGuestDetailsPopup, @EnableCashDrawer, @EnableKDSPrint, @SVCIdentification, @EnableCombo, @ShowLoyalty, @ShowRewardPoints, @ShowPromoCode, @EnableComboPrint, @PromoMinSubtotal, GETDATE())
         END
       `);
 

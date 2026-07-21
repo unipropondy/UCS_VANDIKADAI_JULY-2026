@@ -102,6 +102,7 @@ export default function GeneralSettingsScreen() {
   const [showLoyalty, setShowLoyalty] = useState(settings.showLoyalty !== undefined ? settings.showLoyalty : true);
   const [showRewardPoints, setShowRewardPoints] = useState(settings.showRewardPoints !== undefined ? settings.showRewardPoints : true);
   const [showPromoCode, setShowPromoCode] = useState(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
+  const [promoMinSubtotal, setPromoMinSubtotal] = useState(settings.promoMinSubtotal !== undefined ? String(settings.promoMinSubtotal) : "10.00");
 
   const [enablePrintPoller, setEnablePrintPoller] = useState(settings.enablePrintPoller !== undefined ? settings.enablePrintPoller : true);
   const [printPollerUrl, setPrintPollerUrl] = useState(settings.printPollerUrl || "https://ucsvandikadaijuly-2026-production.up.railway.app");
@@ -183,6 +184,7 @@ export default function GeneralSettingsScreen() {
     setShowLoyalty(settings.showLoyalty !== undefined ? settings.showLoyalty : true);
     setShowRewardPoints(settings.showRewardPoints !== undefined ? settings.showRewardPoints : true);
     setShowPromoCode(settings.showPromoCode !== undefined ? settings.showPromoCode : true);
+    setPromoMinSubtotal(settings.promoMinSubtotal !== undefined ? String(settings.promoMinSubtotal) : "10.00");
 
     setEnablePrintPoller(settings.enablePrintPoller !== undefined ? settings.enablePrintPoller : true);
     setPrintPollerUrl(settings.printPollerUrl || "https://ucsvandikadaijuly-2026-production.up.railway.app");
@@ -304,6 +306,7 @@ export default function GeneralSettingsScreen() {
       showLoyalty,
       showRewardPoints,
       showPromoCode,
+      promoMinSubtotal: parseFloat(promoMinSubtotal) || 0,
       enableComboPrint,
       enablePrintPoller,
       printPollerUrl,
@@ -562,6 +565,37 @@ export default function GeneralSettingsScreen() {
             </View>
           )}
         </View>
+
+        {/* Promo Code Minimum Order Settings Section */}
+        {showPromoCode && (
+          <View style={styles.pollerSection}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Ionicons name="pricetag" size={18} color={Theme.primary} />
+              <Text style={{ fontSize: 16, fontFamily: Fonts.bold, color: Theme.textPrimary }}>
+                Promo Code Configuration
+              </Text>
+            </View>
+            <View style={styles.pollerInputsContainer}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Minimum Order Amount ($ / Currency)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="10.00"
+                  value={promoMinSubtotal}
+                  onChangeText={(val) => {
+                    let cleaned = val.replace(/[^0-9.]/g, "");
+                    const parts = cleaned.split(".");
+                    if (parts.length > 2) {
+                      cleaned = parts[0] + "." + parts.slice(1).join("");
+                    }
+                    setPromoMinSubtotal(cleaned);
+                  }}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Footer */}
